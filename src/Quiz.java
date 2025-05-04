@@ -26,7 +26,7 @@ public class Quiz implements ActionListener {
     private List<String> countryNames;
     private String correctCountryName; // Název správné země pro aktuální vlajku
     private int correct_guesses = 0; // Počet správných odpovědí
-    private int total_questions; // Celkový počet otázek (počet dostupných vlajek)
+    private int total_questions; // Celkový počet otázek
     private int index = 0; // Index aktuální otázky
     private int result;    // Procentuální výsledek
     private int seconds = 30; // Čas na odpověď
@@ -52,7 +52,7 @@ public class Quiz implements ActionListener {
         loadFlagFileNames();
         loadCountryCodes();
         // Nastavení celkového počtu otázek
-        total_questions = flagFileNames.size();
+        total_questions = 10;//flagFileNames.size();
         // Zobrazení první otázky
         nextQuestion();
     }
@@ -173,10 +173,10 @@ public class Quiz implements ActionListener {
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
             String line;
             while ((line = br.readLine()) != null) {
-                String[] parts = line.split(",");
+                String[] parts = line.split(";");
                 if (parts.length == 2) {
-                    String code = parts[0].trim().toLowerCase(); // Kódy zemí jsou lowercase
-                    String name = parts[1].trim();
+                    String code = parts[1].trim().toLowerCase(); // Kódy zemí jsou lowercase
+                    String name = parts[0].trim();
                     countryCodes.put(code, name);
                     countryNames.add(name); // Přidáme i do seznamu jmen
                 }
