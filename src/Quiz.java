@@ -2,83 +2,68 @@ import java.awt.event.*;
 import java.awt.*;
 import javax.swing.*;
 import java.io.File;
-import javax.swing.JOptionPane;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 public class Quiz implements ActionListener {
-    String[] questions = {
-            "Which state does this flag belong to??",
-            "Which year was Java created?",
-            "What was Java originally called?",
-            "Who is credited with creating Java?"
-    };
+    // Konstanty pro nastavení hry
+    private static final int NUMBER_OF_OPTIONS = 4; // Počet možných odpovědí
+    private static final int FLAG_WIDTH = 650;    // Šířka obrázku vlajky
+    private static final int FLAG_HEIGHT = 200;   // Výška obrázku vlajky
+    private static final String FLAGS_FOLDER = "C:\\Users\\evast\\IdeaProjects\\Flags\\Flags"; // Cesta ke složce s vlajkami
+    private static final String KODY_CSV_PATH = "C:\\Users\\evast\\IdeaProjects\\Flags\\Flags\\Kody zemi\\kody.csv"; // Cesta k souboru s kódy zemí
 
-    String[][] options = {
-            {"Sun Microsystems", "Starbucks", "Microsoft", "Alphabet"},
-            {"1989", "1996", "1972", "1492"},
-            {"Apple", "Latte", "Oak", "Koffing"},
-            {"Steve Jobs", "Bill Gates", "James Gosling", "Mark Zuckerburg"}
-    };
+    // Proměnné pro ukládání dat
+    private List<String> flagFileNames; // Názvy souborů s vlajkami
+    private Map<String, String> countryCodes; // Mapování kódů zemí na jejich názvy
+    private List<String> countryNames;
+    private String correctCountryName; // Název správné země pro aktuální vlajku
+    private int correct_guesses = 0; // Počet správných odpovědí
+    private int total_questions; // Celkový počet otázek (počet dostupných vlajek)
+    private int index = 0; // Index aktuální otázky
+    private int result;    // Procentuální výsledek
+    private int seconds = 30; // Čas na odpověď
+    private char[] correctAnswers = new char[NUMBER_OF_OPTIONS];
 
-    private int numberOfOptions = 4; // počet možných odpovědí na otázku
-
-    char[] correctAnswers = {
-            'A',
-            'B',
-            'C',
-            'C'
-    };
-
-    char answer;
-    int index;
-    int correct_guesses = 0;
-    int total_questions = questions.length;
-    int result;
-    int seconds = 30;
-
-    JFrame frame = new JFrame();
-    JTextField textfield = new JTextField();
-    JTextArea textarea = new JTextArea();
-    JLabel flagLabel = new JLabel();
-    private String[] flagFileNames; // Proměnná pro uložení názvů souborů s vlajkami
-    JButton buttonA = new JButton();
-    JButton buttonB = new JButton();
-    JButton buttonC = new JButton();
-    JButton buttonD = new JButton();
-
-    JButton[] buttons = new JButton[numberOfOptions];
-    JLabel[] answerLabels = new JLabel[numberOfOptions];
-    JLabel answer_labelA = new JLabel();
-    JLabel answer_labelB = new JLabel();
-    JLabel answer_labelC = new JLabel();
-    JLabel answer_labelD = new JLabel();
-    JLabel time_label = new JLabel();
-    JLabel seconds_left = new JLabel();
-    JTextField number_right = new JTextField();
-    JTextField percentage = new JTextField();
-
+    // Komponenty grafického rozhraní
+    private JFrame frame = new JFrame();
+    private JTextField textfield = new JTextField();
+    private JLabel flagLabel = new JLabel();
+    private JLabel time_label = new JLabel();
+    private JLabel seconds_left = new JLabel();
+    private JTextField number_right = new JTextField();
+    private JTextField percentage = new JTextField();
+    private JButton[] buttons = new JButton[NUMBER_OF_OPTIONS];
+    private JLabel[] answerLabels = new JLabel[NUMBER_OF_OPTIONS];
+    private Timer timer;
     private Random random = new Random();
-    Timer timer = new Timer(3000, new ActionListener() {
-
-
-        @Override
-
-        public void actionPerformed(ActionEvent e) {
-
-            seconds--;
-            seconds_left.setText(String.valueOf(seconds));
-            if (seconds <= 0) {
-                displayAnswer();
-            }
-        }
-    });
 
     public Quiz() {
+        // Inicializace GUI
+        initializeGUI();
+        // Načtení dat
+        loadFlagFileNames();
+        loadCountryCodes();
+        // Nastavení celkového počtu otázek
+        total_questions = flagFileNames.size();
+        // Zobrazení první otázky
+        nextQuestion();
+    }
+
+    private void initializeGUI() {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(650, 1050);
+        frame.setSize(650, 750); // Zmenšeno, aby se vešly 4 odpovědi pod vlajku
         frame.getContentPane().setBackground(new Color(50, 50, 50));
         frame.setLayout(null);
         frame.setResizable(false);
+
         textfield.setBounds(0, 0, 650, 50);
         textfield.setBackground(new Color(25, 25, 25));
         textfield.setForeground(new Color(25, 255, 0));
@@ -86,214 +71,228 @@ public class Quiz implements ActionListener {
         textfield.setBorder(BorderFactory.createBevelBorder(1));
         textfield.setHorizontalAlignment(JTextField.CENTER);
         textfield.setEditable(false);
-        textarea.setBounds(0, 350, 650, 50);
-        textarea.setLineWrap(true);
-        textarea.setWrapStyleWord(true);
-        textarea.setBackground(new Color(25, 25, 25));
-        textarea.setForeground(new Color(25, 255, 0));
-        textarea.setFont(new Font("MV Boli", Font.BOLD, 25));
-        textarea.setBorder(BorderFactory.createBevelBorder(1));
-        textarea.setEditable(false);
-        flagLabel.setBounds(0, 50, 650, 200); // Nastavíš pozici a rozměry (výšku si uprav podle potřeby)
-        flagLabel.setHorizontalAlignment(SwingConstants.CENTER); // Zarovnání obrázku na střed
-        frame.add(flagLabel);
+        textfield.setText("Which country does this flag belong to?"); // Otázka se nyní nastavuje zde a nemění se
+
+        flagLabel.setBounds(0, 50, FLAG_WIDTH, FLAG_HEIGHT);
         flagLabel.setHorizontalAlignment(SwingConstants.CENTER);
         frame.add(flagLabel);
-        loadFlagFileNames(); // Načti názvy souborů
 
-        int buttonHeight = 100;
+        int buttonHeight = 50; // Zmenšeno výška tlačítek
         int buttonWidth = 100;
-        int startY = 100;
+        int startY = FLAG_HEIGHT + 60; // Posunuto za vlajku + mezera
         int xPosition = 0;
+        int labelX = buttonWidth + 10; // Popisky vpravo od tlačítek
 
-        for (int i = 0; i < numberOfOptions; i++) {
+        for (int i = 0; i < NUMBER_OF_OPTIONS; i++) {
             buttons[i] = new JButton();
-            buttons[i].setFont(new Font("MV Boli", Font.BOLD, 35));
+            buttons[i].setFont(new Font("MV Boli", Font.BOLD, 20)); // Zmenšeno font
             buttons[i].setFocusable(false);
             buttons[i].addActionListener(this);
-            buttons[i].setText(String.valueOf((char) ('A' + i)));
+            buttons[i].setText(String.valueOf((char) ('A' + i))); // A, B, C, D
             buttons[i].setBounds(xPosition, startY + i * buttonHeight, buttonWidth, buttonHeight);
             frame.add(buttons[i]);
 
             answerLabels[i] = new JLabel();
             answerLabels[i].setBackground(new Color(50, 50, 50));
             answerLabels[i].setForeground(new Color(25, 255, 0));
-            answerLabels[i].setFont(new Font("MV Boli", Font.PLAIN, 35));
-            answerLabels[i].setBounds(125, startY + i * buttonHeight, 500, buttonHeight);
+            answerLabels[i].setFont(new Font("MV Boli", Font.PLAIN, 20)); // Zmenšeno font
+            answerLabels[i].setBounds(labelX, startY + i * buttonHeight, 500, buttonHeight); // Popisky vpravo
             frame.add(answerLabels[i]);
         }
 
-       /* buttonA.setBounds(0, 100, 100, 100);
-        buttonA.setFont(new Font("MV Boli", Font.BOLD, 35));
-        buttonA.setFocusable(false);
-        buttonA.addActionListener(this);
-        buttonA.setText("A");
-        buttonB.setBounds(0, 200, 100, 100);
-        buttonB.setFont(new Font("MV Boli", Font.BOLD, 35));
-        buttonB.setFocusable(false);
-        buttonB.addActionListener(this);
-        buttonB.setText("B");
-        buttonC.setBounds(0, 300, 100, 100);
-        buttonC.setFont(new Font("MV Boli", Font.BOLD, 35));
-        buttonC.setFocusable(false);
-        buttonC.addActionListener(this);
-        buttonC.setText("C");
-        buttonD.setBounds(0, 400, 100, 100);
-        buttonD.setFont(new Font("MV Boli", Font.BOLD, 35));
-        buttonD.setFocusable(false);
-        buttonD.addActionListener(this);
-        buttonD.setText("D");
-        answer_labelA.setBounds(125, 100, 500, 100);
-        answer_labelA.setBackground(new Color(50, 50, 50));
-        answer_labelA.setForeground(new Color(25, 255, 0));
-        answer_labelA.setFont(new Font("MV Boli", Font.PLAIN, 35));
-        answer_labelB.setBounds(125, 200, 500, 100);
-        answer_labelB.setBackground(new Color(50, 50, 50));
-        answer_labelB.setForeground(new Color(25, 255, 0));
-        answer_labelB.setFont(new Font("MV Boli", Font.PLAIN, 35));
-        answer_labelC.setBounds(125, 300, 500, 100);
-        answer_labelC.setBackground(new Color(50, 50, 50));
-        answer_labelC.setForeground(new Color(25, 255, 0));
-        answer_labelC.setFont(new Font("MV Boli", Font.PLAIN, 35));
-        answer_labelD.setBounds(125, 400, 500, 100);
-        answer_labelD.setBackground(new Color(50, 50, 50));
-        answer_labelD.setForeground(new Color(25, 255, 0));
-        answer_labelD.setFont(new Font("MV Boli", Font.PLAIN, 35)); */
-        seconds_left.setBounds(535, 510, 100, 100);
-        seconds_left.setBackground(new Color(25, 25, 25));
-        seconds_left.setForeground(new Color(255, 0, 0));
-        seconds_left.setFont(new Font("Ink Free", Font.BOLD, 60));
-        seconds_left.setBorder(BorderFactory.createBevelBorder(1));
-        seconds_left.setOpaque(true);
-        seconds_left.setHorizontalAlignment(JTextField.CENTER);
-        seconds_left.setText(String.valueOf(seconds));
-        time_label.setBounds(535, 475, 100, 25);
+        time_label.setBounds(535, 610, 100, 25); // Přesunuto dolů
         time_label.setBackground(new Color(50, 50, 50));
         time_label.setForeground(new Color(255, 0, 0));
         time_label.setFont(new Font("MV Boli", Font.PLAIN, 16));
         time_label.setHorizontalAlignment(JTextField.CENTER);
-        time_label.setText("timer >:D");
-        number_right.setBounds(225, 225, 200, 100);
+        time_label.setText("Time Left:");
+
+        seconds_left.setBounds(535, 635, 100, 50); // Pod time_label
+        seconds_left.setBackground(new Color(25, 25, 25));
+        seconds_left.setForeground(new Color(255, 0, 0));
+        seconds_left.setFont(new Font("Ink Free", Font.BOLD, 30)); // Zmenšeno font
+        seconds_left.setBorder(BorderFactory.createBevelBorder(1));
+        seconds_left.setOpaque(true);
+        seconds_left.setHorizontalAlignment(JTextField.CENTER);
+        seconds_left.setText(String.valueOf(seconds));
+
+        number_right.setBounds(225, 610, 200, 30); // Přesunuto dolů a zmenšeno
         number_right.setBackground(new Color(25, 25, 25));
         number_right.setForeground(new Color(25, 255, 0));
-        number_right.setFont(new Font("Ink Free", Font.BOLD, 50));
+        number_right.setFont(new Font("Ink Free", Font.BOLD, 20)); // Zmenšeno font
         number_right.setBorder(BorderFactory.createBevelBorder(1));
         number_right.setHorizontalAlignment(JTextField.CENTER);
         number_right.setEditable(false);
-        percentage.setBounds(225, 325, 200, 100);
+
+        percentage.setBounds(225, 640, 200, 30); // Pod number_right
         percentage.setBackground(new Color(25, 25, 25));
         percentage.setForeground(new Color(25, 255, 0));
-        percentage.setFont(new Font("Ink Free", Font.BOLD, 50));
+        percentage.setFont(new Font("Ink Free", Font.BOLD, 20)); // Zmenšeno font
         percentage.setBorder(BorderFactory.createBevelBorder(1));
         percentage.setHorizontalAlignment(JTextField.CENTER);
         percentage.setEditable(false);
+
         frame.add(time_label);
         frame.add(seconds_left);
-        frame.add(textarea);
-        frame.add(textfield);
+        frame.add(number_right);
+        frame.add(percentage);
+        frame.add(textfield); //textfield s otázkou
         frame.setVisible(true);
-        nextQuestion();
+
+        timer = new Timer(1000, new ActionListener() { // Timer po sekundách
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                seconds--;
+                seconds_left.setText(String.valueOf(seconds));
+                if (seconds <= 0) {
+                    displayAnswer();
+                }
+            }
+        });
     }
 
     private void loadFlagFileNames() {
-        File folder = new File("C:\\Users\\evast\\OneDrive\\Documents\\Moje\\Java\\Quiz game\\Quiz game\\Flags");
+        File folder = new File(FLAGS_FOLDER);
         File[] listOfFiles = folder.listFiles((dir, name) -> name.toLowerCase().endsWith(".png"));
 
         if (listOfFiles != null) {
-            flagFileNames = new String[listOfFiles.length];
-            for (int i = 0; i < listOfFiles.length; i++) {
-                flagFileNames[i] = listOfFiles[i].getName();
+            flagFileNames = new ArrayList<>(); // Používáme ArrayList
+            for (File file : listOfFiles) {
+                flagFileNames.add(file.getName());
             }
         } else {
             JOptionPane.showMessageDialog(frame, "Chyba: Nenalezeny žádné soubory .png ve složce s vlajkami.", "Chyba", JOptionPane.ERROR_MESSAGE);
-            flagFileNames = new String[0]; // Nastavíme prázdné pole, abychom předešli null pointer exception
+            flagFileNames = new ArrayList<>();
         }
+    }
+
+    private void loadCountryCodes() {
+        countryCodes = new HashMap<>();
+        countryNames = new ArrayList<>();
+        File file = new File(KODY_CSV_PATH);
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length == 2) {
+                    String code = parts[0].trim().toLowerCase(); // Kódy zemí jsou lowercase
+                    String name = parts[1].trim();
+                    countryCodes.put(code, name);
+                    countryNames.add(name); // Přidáme i do seznamu jmen
+                }
+            }
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(frame, "Chyba: Nepodařilo se načíst soubor s kódy zemí.", "Chyba", JOptionPane.ERROR_MESSAGE);
+            countryCodes = new HashMap<>();
+            countryNames = new ArrayList<>();
+        }
+    }
+
+    private String getCountryNameForFlag(String flagFileName) {
+        // Odstraníme příponu ".png" a získáme kód země
+        String countryCode = flagFileName.replace(".png", "").toLowerCase();
+        return countryCodes.get(countryCode);
     }
 
     public void nextQuestion() {
+        seconds = 30;
+        seconds_left.setText(String.valueOf(seconds));
+        timer.start();
 
         if (index >= total_questions) {
             results();
-        } else {
-            textfield.setText("Question " + (index + 1));
-            textarea.setText(questions[index]);
-            answer_labelA.setText(options[index][0]);
-            answer_labelB.setText(options[index][1]);
-            answer_labelC.setText(options[index][2]);
-            answer_labelD.setText(options[index][3]);
-            if (flagFileNames != null && flagFileNames.length > 0) {
-                int randomIndex = random.nextInt(flagFileNames.length);
-                String selectedFlagFileName = flagFileNames[randomIndex];
-                String flagFilePath = "C:\\Users\\evast\\OneDrive\\Documents\\Moje\\Java\\Quiz game\\Quiz game\\Flags\\" + selectedFlagFileName;
+            return;
+        }
 
-                ImageIcon flagIcon = new ImageIcon(flagFilePath);
+        if (flagFileNames.isEmpty()) {
+            flagLabel.setText("Chyba: Žádné vlajky k zobrazení.");
+            flagLabel.setIcon(null);
+            return;
+        }
 
-                // Pro lepší škálování vlajky na velikost Labelu (volitelné)
-                Image scaledImage = flagIcon.getImage().getScaledInstance(flagLabel.getWidth(), flagLabel.getHeight(), Image.SCALE_SMOOTH);
-                ImageIcon scaledFlagIcon = new ImageIcon(scaledImage);
+        // Náhodný výběr vlajky
+        int randomIndex = random.nextInt(flagFileNames.size());
+        String selectedFlagFileName = flagFileNames.get(randomIndex);
+        String flagFilePath = FLAGS_FOLDER + "\\" + selectedFlagFileName;
+        correctCountryName = getCountryNameForFlag(selectedFlagFileName); // Získání názvu správné země
 
-                flagLabel.setIcon(scaledFlagIcon);
-                flagLabel.setText(""); // Ujisti se, že text v labelu je prázdný
-            } else {
-                flagLabel.setText("Chyba: Žádné vlajky k zobrazení.");
-                flagLabel.setIcon(null);
-            }
-            timer.start();
+        if (correctCountryName == null) {
+            correctCountryName = "Unknown";
+        }
+        ImageIcon flagIcon = new ImageIcon(flagFilePath);
+        Image scaledImage = flagIcon.getImage().getScaledInstance(FLAG_WIDTH, FLAG_HEIGHT, Image.SCALE_SMOOTH);
+        ImageIcon scaledFlagIcon = new ImageIcon(scaledImage);
+        flagLabel.setIcon(scaledFlagIcon);
+        flagLabel.setText("");
+
+        // Generování náhodných odpovědí
+        List<String> answers = generateRandomAnswers(correctCountryName);
+
+        // Nastavení odpovědí do popisků
+        for (int i = 0; i < NUMBER_OF_OPTIONS; i++) {
+            answerLabels[i].setText(answers.get(i));
+        }
+        //povolíme buttony
+        for (JButton button : buttons) {
+            button.setEnabled(true);
         }
     }
 
-    @Override
+    private List<String> generateRandomAnswers(String correctCountryName) {
+        List<String> answers = new ArrayList<>();
+        answers.add(correctCountryName); // Přidáme správnou odpověď
+
+        // Náhodně vybereme 3 různé nesprávné odpovědi
+        while (answers.size() < NUMBER_OF_OPTIONS) {
+            String randomCountry = countryNames.get(random.nextInt(countryNames.size()));
+            if (!answers.contains(randomCountry)) { // Kontrola duplicity
+                answers.add(randomCountry);
+            }
+        }
+        Collections.shuffle(answers); // Zamícháme odpovědi
+        return answers;
+    }
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        // Zablokujeme všechna tlačítka, dokud se nezobrazí další otázka
+        // Zablokujeme tlačítka
         for (JButton button : buttons) {
             button.setEnabled(false);
         }
+        timer.stop();
 
-        char answer = ' '; // Inicializujeme proměnnou answer
-
+        String selectedAnswer = ""; // Inicializace
         for (int i = 0; i < buttons.length; i++) {
             if (e.getSource() == buttons[i]) {
-                answer = (char) ('A' + i); // Určíme, které písmeno odpovídá stisknutému tlačítku
-                if (answer == correctAnswers[index]) {
-                    correct_guesses++;
-                }
-                break; // Jakmile najdeme stisknuté tlačítko, můžeme cyklus ukončit
+                selectedAnswer = answerLabels[i].getText();
+                break;
             }
+        }
+
+        if (selectedAnswer.equals(correctCountryName)) {
+            correct_guesses++;
         }
         displayAnswer();
     }
 
     public void displayAnswer() {
-
         timer.stop();
-        buttonA.setEnabled(false);
-        buttonB.setEnabled(false);
-        buttonC.setEnabled(false);
-        buttonD.setEnabled(false);
-        if (correctAnswers[index] != 'A')
-            answer_labelA.setForeground(new Color(255, 0, 0));
-        if (correctAnswers[index] != 'B')
-            answer_labelB.setForeground(new Color(255, 0, 0));
-        if (correctAnswers[index] != 'C')
-            answer_labelC.setForeground(new Color(255, 0, 0));
-        if (correctAnswers[index] != 'D')
-            answer_labelD.setForeground(new Color(255, 0, 0));
-        Timer pause = new Timer(2000, new ActionListener() {
+        for (JButton button : buttons) {
+            button.setEnabled(false);
+        }
 
+        for (int i = 0; i < NUMBER_OF_OPTIONS; i++) {
+            if (answerLabels[i].getText().equals(correctCountryName)) {
+                answerLabels[i].setForeground(new Color(0, 255, 0)); // Správná odpověď zeleně
+            } else {
+                answerLabels[i].setForeground(new Color(255, 0, 0)); // Ostatní červeně
+            }
+        }
+
+        Timer pause = new Timer(2000, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                answer_labelA.setForeground(new Color(25, 255, 0));
-                answer_labelB.setForeground(new Color(25, 255, 0));
-                answer_labelC.setForeground(new Color(25, 255, 0));
-                answer_labelD.setForeground(new Color(25, 255, 0));
-                answer = ' ';
-                seconds = 10;
-                seconds_left.setText(String.valueOf(seconds));
-                for (JButton button : buttons) {
-                    button.setEnabled(true);
-                }
+                resetAnswerLabels();
                 index++;
                 nextQuestion();
             }
@@ -302,20 +301,30 @@ public class Quiz implements ActionListener {
         pause.start();
     }
 
+    private void resetAnswerLabels() {
+        for (JLabel label : answerLabels) {
+            label.setForeground(new Color(25, 255, 0)); // Reset na původní barvu
+        }
+    }
+
     public void results() {
         for (JButton button : buttons) {
             button.setEnabled(false);
         }
+        timer.stop();
         result = (int) ((correct_guesses / (double) total_questions) * 100);
         textfield.setText("RESULTS!");
-        textarea.setText("");
-        answer_labelA.setText("");
-        answer_labelB.setText("");
-        answer_labelC.setText("");
-        answer_labelD.setText("");
+        flagLabel.setIcon(null); // Odstraníme vlajku
+        for (JLabel label : answerLabels) { // Odstraníme texty odpovědí
+            label.setText("");
+        }
         number_right.setText("(" + correct_guesses + "/" + total_questions + ")");
         percentage.setText(result + "%");
         frame.add(number_right);
         frame.add(percentage);
+    }
+
+    public static void main(String[] args) {
+        new Quiz();
     }
 }
